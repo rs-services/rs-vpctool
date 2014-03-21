@@ -1,6 +1,7 @@
 require 'rubygems'
 require 'logger'
 require "right_api_client"
+require 'pp'
 
 @logger            = Logger.new(STDOUT)
 
@@ -95,17 +96,11 @@ def create_subnet(name,cidr_block, datacenter)
       datacenter_href: datacenter.href, network_href: @network.href,description: name}) 
 
   @logger.info "Created subnet #{name} for datacenter #{datacenter.name}"
-    subnet
+  subnet
 end
 
 def create_rt_private()
   rt = @client.route_tables.create(route_table: {name: 'private', cloud_href: @cloud.href, network_href: @network.href})
-  
-  #@client.routes.create(route: {destination_cidr_block: '10.0.0.0/16', 
-  #   next_hop_type: 'network_interface', route_table_href: rt.href, next_hop_ip: '0.0.0.0/0'})
-# @client.routes.create(route: {destination_cidr_block: '0.0.0.0/0', 
- #     next_hop_type: 'instance', next_hop_href: @nat_server.href ,route_table_href: rt.href})
-rt
 end
 
 def create_gw()
@@ -140,9 +135,16 @@ def create_nat_host()
 end
 
 def add_nat_to_rt(server)
-  rt = @client.route_tables.index(filter: ["name==private","network_href==#{@network.href}"])
-  rt.show.routes.create(route: {destination_cidr_block: '0.0.0.0/0', 
-      next_hop_type: 'instance', next_hop_href: server.href })
+  rt = @client.route_tables.index(filter: ["name==private","network_href==#{@network.href}"]).first
+  @logger.info server.href
+  while  server.show.state == 'pending'
+    sleep 30
+    
+    @logger.info "Waiting for server to boot to attach Route: server status: #{server.show.state}"
+  end
+  server =  @client.servers(id: server.href.split('/').last ).show
+  rt.routes.create(route: {destination_cidr_block: '0.0.0.0/0', 
+      next_hop_type: 'instance', next_hop_href: server.current_instance.href ,route_table_href: rt.href})
 end
 
 
@@ -157,20 +159,21 @@ network_name='vpctool-test2'
 
 @deployment = @client.deployments.index(filter: ["name==#{network_name}"]).first
 unless @deployment
-@deployment = @client.deployments.create(deployment: {name: network_name})
+  @deployment = @client.deployments.create(deployment: {name: network_name})
 else
 
- servers =  @deployment.servers.index(filter: ["name==vpc nat host"])
- servers.each do |server| 
-   state =  server.show.state
-   server.terminate unless state=='inactive'
-   while state != 'inactive'
-     sleep 30
-     state =  server.show.state
-     @logger.info "Waiting for server to terminate.  Server state: #{state}"
-   end
-   server.destroy
- end
+  servers =  @deployment.servers.index(filter: ["name==vpc nat host"])
+  servers.each do |server| 
+    server_id = server.href.split('/').last
+    state =  server.show.state
+    server.terminate unless state=='inactive'
+    while state != 'inactive'
+      sleep 30
+      state =  @client.servers(id: server_id ).show.state
+      @logger.info "Waiting for server to terminate.  Server state: #{state}"
+    end
+    server.destroy
+  end
 end
 
 @network = create_network(network_name)
@@ -184,13 +187,13 @@ create_nathost_security_group()
 datacenters= @cloud.datacenters.index
 
 @logger.info "Create Network Public Subnets"
-datacenters[0..2].each_with_index do |d,i|
+datacenters[0..datacenters.size - 1].each_with_index do |d,i|
   name="public-#{d.name.split('-').last}"
   @logger.info "creating subnet #{name} in #{d.name}"
   @logger.info d.href
   @logger.info @network.href
   begin
-  subnet = create_subnet(name, "10.0.#{i}.0/24", d)
+    subnet = create_subnet(name, "10.0.#{i}.0/24", d)
   rescue StandardError => e
     @logger.error "my error #{e}"
     next
@@ -199,24 +202,25 @@ datacenters[0..2].each_with_index do |d,i|
   rt = @client.route_tables.index(filter: ["network_href==#{@network.href}"]).first
   @logger.info "subnet #{subnet.inspect}"
   if rt
-  rt.update(route_table: {name: 'public'}) 
-  subnet.update(subnet:{route_table_href: rt.href})
+    rt.update(route_table: {name: 'public'}) 
+    subnet.update(subnet:{route_table_href: rt.href})
   end
 end
 
 @logger.info "Create Network Private Subnets"
-datacenters[0..2].each_with_index do |d,i|
+rt=nil
+datacenters[0..datacenters.size - 1].each_with_index do |d,i|
   name="private-#{d.name.split('-').last}"
   @logger.info "creating subnet #{name} in #{d.name}"
   @logger.info d.href
   @logger.info @network.href
   begin
-  subnet = create_subnet(name, "10.0.1#{i}.0/24", d)
+    subnet = create_subnet(name, "10.0.1#{i}.0/24", d)
   rescue StandardError => e
-     @logger.error "my error #{e}"
+    @logger.error "my error #{e}"
     next
   end
-  rt = create_rt_private()
+  rt = create_rt_private() if rt.nil?
   subnet.update(subnet:{route_table_href: rt.href})
 end
 
