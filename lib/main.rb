@@ -34,7 +34,7 @@ def create_network(name)
     nng.update(network_gateway:{network_href:''}) if nng
     subnets = @cloud.subnets.index(filter: ["network_href==#{network.href}"])
     subnets.each{|subnet| @cloud.subnets(id: subnet.href.split('/').last).destroy}
-    route_tables = @client.route_tables.index(filter: ["network_href==#{network.href}","name<>public"])
+    route_tables = @client.route_tables.index(filter: ["network_href==#{network.href}","name<>rt-"])
     route_tables.each{|route_table| @client.route_tables(id: route_table.href.split('/').last).destroy} 
     @client.networks(id: network_id).destroy 
 
@@ -99,6 +99,16 @@ def create_subnet(name,cidr_block, datacenter)
   subnet
 end
 
+def create_rt_public()
+  rt = @client.route_tables.create(route_table: {name:'public', 
+      network_href: @network.href, cloud_href: @cloud.href})
+    ##index(filter: ["network_href==#{@network.href}"]).first 
+  #@logger.info "rt #{rt}"
+  #@client.route_tables(id: rt.href.split('/').last).update(route_table: {name: 'public'}) 
+  rt.show.routes.create(route: {destination_cidr_block: '0.0.0.0/0', 
+      next_hop_type: 'network_gateway', next_hop_href: @gateway.href ,route_table_href: rt.href})
+  rt
+end
 def create_rt_private()
   rt = @client.route_tables.create(route_table: {name: 'private', cloud_href: @cloud.href, network_href: @network.href})
 end
@@ -115,6 +125,7 @@ def create_gw()
       cloud_href: @cloud.href, type: 'internet', network_href: @network.href})
   nng.update(network_gateway:{network_href: @network.href})
   @logger.info "Network Gateway #{ng.show.name} created."
+  nng
 end
 
 def create_eip()
@@ -152,7 +163,7 @@ end
 @client = initialize_api_client(options = {})
 mycloud = ARGV[3]
 network_name='vpctool-test2'
-@client.log(STDOUT)
+#@client.log(STDOUT)
 @cloud = list_cloud(mycloud)
 @logger.info "Building Network"
 
@@ -176,9 +187,11 @@ else
   end
 end
 
+@logger.info "Creating Network"
 @network = create_network(network_name)
+@logger.info "Creating Internet Gateway"
+@gateway=create_gw()
 
-create_gw()
 @logger.info "Create Network Security Groups"
 create_admin_security_group()
 create_passthrough_security_group()
@@ -187,51 +200,42 @@ create_nathost_security_group()
 datacenters= @cloud.datacenters.index
 
 @logger.info "Create Network Public Subnets"
+public_rt=nil
 datacenters[0..datacenters.size - 1].each_with_index do |d,i|
   name="public-#{d.name.split('-').last}"
-  @logger.info "creating subnet #{name} in #{d.name}"
-  @logger.info d.href
-  @logger.info @network.href
+  @logger.info "Creating subnet #{name} in #{d.name}"
   begin
     subnet = create_subnet(name, "10.0.#{i}.0/24", d)
+    # there should only be one route table.
+    public_rt = create_rt_public() if public_rt.nil?
+    subnet.update(subnet:{route_table_href: public_rt.href})
   rescue StandardError => e
-    @logger.error "my error #{e}"
+    @logger.info "datacenter #{d.name} unavailable.  trying another"
     next
   end
-  # there should only be one route table.
-  rt = @client.route_tables.index(filter: ["network_href==#{@network.href}"]).first
-  @logger.info "subnet #{subnet.inspect}"
-  if rt
-    rt.update(route_table: {name: 'public'}) 
-    subnet.update(subnet:{route_table_href: rt.href})
-  end
+ 
 end
 
 @logger.info "Create Network Private Subnets"
 rt=nil
 datacenters[0..datacenters.size - 1].each_with_index do |d,i|
   name="private-#{d.name.split('-').last}"
-  @logger.info "creating subnet #{name} in #{d.name}"
-  @logger.info d.href
-  @logger.info @network.href
+  @logger.info "Creating subnet #{name} in #{d.name}"
   begin
     subnet = create_subnet(name, "10.0.1#{i}.0/24", d)
+    rt = create_rt_private() if rt.nil?
+    subnet.update(subnet:{route_table_href: rt.href})
   rescue StandardError => e
-    @logger.error "my error #{e}"
+    @logger.info "datacenter #{d.name} unavailable.  trying another"
     next
   end
-  rt = create_rt_private() if rt.nil?
-  subnet.update(subnet:{route_table_href: rt.href})
+  
 end
 
 @logger.info "Launching Server"
 server = create_nat_host()
-status = server.show.state
-#while status != 'pending'
-#  sleep 30
-#  status = server.show.state
-#  @logger.info "Server is #{status}"
-#end
+
+@logger.info "Adding Nat Host to public route"
 add_nat_to_rt(server)
 
 @logger.info "Network Built"
