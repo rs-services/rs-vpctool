@@ -2,7 +2,7 @@ require 'rubygems'
 require 'logger'
 require "right_api_client"
 require 'pp'
-
+require 'yaml'
 @logger            = Logger.new(STDOUT)
 
 def initialize_api_client(options = {})
@@ -20,11 +20,11 @@ def initialize_api_client(options = {})
   RightApi::Client.new(options)
 end
 
-def list_cloud(cloud)
-  @client.clouds.index(view: 'extended', :filter => ["name==#{cloud}"]).first
+def cloud()
+  @client.clouds(id: @config[:cloud_id]).show
 end
 def create_network(name)
-  network=@client.networks.index(filter: ["name==#{name}"]).first
+  network=@client.networks.index(filter: ["name==#{name}","cloud_href==#{@cloud.href}"]).first
   if network
     @logger.info "network found #{network.show.name}"
     sgs = @cloud.security_groups.index(filter: ["network_href==#{network.href}"])
@@ -44,7 +44,7 @@ def create_network(name)
   new_network=@client.networks.create(network:{cidr_block: '10.0.0.0/16',cloud_href: @cloud.href,
       name: name})
   @logger.info "new network #{new_network.show.name} created" if new_network
-  @client.networks(id: new_network.href.split('/').last).show  
+  @client.networks(id: new_network.href.split('/').last).show
 end
 
 def create_admin_security_group()
@@ -94,38 +94,54 @@ def create_subnet(name,cidr_block, datacenter)
 
   subnet = @cloud.subnets.create(subnet: {cidr_block: cidr_block, name: name ,
       datacenter_href: datacenter.href, network_href: @network.href,description: name}) 
-
+  while subnet.show.state=='pending'
+    sleep 30
+    @logger.info "subnet status: #{subnet.show.state}"
+  end
   @logger.info "Created subnet #{name} for datacenter #{datacenter.name}"
-  subnet
+  subnet.show
 end
 
 def create_rt_public()
-  rt = @client.route_tables.create(route_table: {name:'public', 
-      network_href: @network.href, cloud_href: @cloud.href})
-    ##index(filter: ["network_href==#{@network.href}"]).first 
-  #@logger.info "rt #{rt}"
-  #@client.route_tables(id: rt.href.split('/').last).update(route_table: {name: 'public'}) 
-  rt.show.routes.create(route: {destination_cidr_block: '0.0.0.0/0', 
-      next_hop_type: 'network_gateway', next_hop_href: @gateway.href ,route_table_href: rt.href})
-  rt
+  rt = @client.route_tables.index(filter: ["name==public","network_href==#{@network.href}",
+      "cloud_href==#{@cloud.href}"]).first
+  unless rt
+    rt = @client.route_tables.create(route_table: {name: 'public', 
+        network_href: @network.href, cloud_href: @cloud.href})
+   
+    rt.show.routes.create(route: {destination_cidr_block: '0.0.0.0/0', 
+        next_hop_type: 'network_gateway', next_hop_href: @gateway.href ,route_table_href: rt.href})
+  end
+  rt.show
 end
 def create_rt_private()
-  rt = @client.route_tables.create(route_table: {name: 'private', cloud_href: @cloud.href, network_href: @network.href})
+  rt = @client.route_tables.index(filter: ["name==private","network_href==#{@network.href}",
+      "cloud_href==#{@cloud.href}"]).first
+  unless rt
+    rt = @client.route_tables.create(route_table: {name: 'private', cloud_href: @cloud.href, network_href: @network.href})
+    
+  end
+  rt.show
 end
 
 def create_gw()
-  ng=@client.network_gateways.index(filter: ["name==#{@network.name}-igw"]).first
+  ng=@client.network_gateways.index(filter: ["name==#{@network.name}-igw","cloud_href==#{@cloud.href}"]).first
   if ng
     @logger.info "network gateway #{ng.show.name} found"
     network_id=ng.href.split('/').last
     @client.network_gateways(id: network_id).destroy 
     @logger.info "network gateway #{ng.show.name} deleted"
+  else
+    ng= @client.network_gateways.create(network_gateway:{name: "#{@network.name}-igw", 
+        cloud_href: @cloud.href, type: 'internet'})
+    ng.update(network_gateway:{network_href: @network.href})
+    @logger.info "Network Gateway #{ng.show.name} created."
   end
-  nng= @client.network_gateways.create(network_gateway:{name: "#{@network.name}-igw", 
-      cloud_href: @cloud.href, type: 'internet', network_href: @network.href})
-  nng.update(network_gateway:{network_href: @network.href})
-  @logger.info "Network Gateway #{ng.show.name} created."
-  nng
+  while ng.show.state == 'pending'
+    sleep 30
+  end
+  
+  ng.show
 end
 
 def create_eip()
@@ -160,19 +176,20 @@ end
 
 
 
-@client = initialize_api_client(options = {})
-mycloud = ARGV[3]
-network_name='vpctool-test2'
-#@client.log(STDOUT)
-@cloud = list_cloud(mycloud)
+@client = RightApi::Client.new(YAML.load_file(File.expand_path('../../config/login.yml', __FILE__)))
+@config = YAML.load_file(File.expand_path('../../config/network.yml', __FILE__))
+
+@client.log(STDOUT) if @config[:client_log_enable]
+network_name=@config[:network_name]
+
+@cloud = cloud()
 @logger.info "Building Network"
 
-
-@deployment = @client.deployments.index(filter: ["name==#{network_name}"]).first
-unless @deployment
-  @deployment = @client.deployments.create(deployment: {name: network_name})
+unless @config[:deployment_id]
+  @logger.error "Missing deployment_id parameter"
+  abort
 else
-
+  @deployment = @client.deployments(id: @config[:deployment_id]).show
   servers =  @deployment.servers.index(filter: ["name==vpc nat host"])
   servers.each do |server| 
     server_id = server.href.split('/').last
@@ -210,6 +227,7 @@ datacenters[0..datacenters.size - 1].each_with_index do |d,i|
     public_rt = create_rt_public() if public_rt.nil?
     subnet.update(subnet:{route_table_href: public_rt.href})
   rescue StandardError => e
+    @logger.error e.message
     @logger.info "datacenter #{d.name} unavailable.  trying another"
     next
   end
@@ -226,6 +244,7 @@ datacenters[0..datacenters.size - 1].each_with_index do |d,i|
     rt = create_rt_private() if rt.nil?
     subnet.update(subnet:{route_table_href: rt.href})
   rescue StandardError => e
+    @logger.error e.message
     @logger.info "datacenter #{d.name} unavailable.  trying another"
     next
   end

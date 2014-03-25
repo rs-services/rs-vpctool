@@ -1,0 +1,31 @@
+## rs-vpctool network configuration
+---
+#The name of the Network you are creating
+:network_name: 'my vpc'
+
+# Cloud ID is a required parameter. You can find your Cloud  Id by logging into the
+# RightScale dashboard (https://my.rightscale.com), navigate to the Settings > Cloud and select a cloud page.
+# The Cloud ID  is at the end of the browser address bar.
+# default: aws us-east-1
+:cloud_id: 6
+
+# Deployment ID is an required parameter. You can find your Deployment  Id by logging into the
+# RightScale dashboard (https://my.rightscale.com), navigate to the Manage > Deployments and select a deployment.
+# The Deployment ID is at the end of the browser address bar.
+:deployment_id: 453925003
+  
+# ServerTemplate ID is a required parameter. You can find your ServerTemplate Id by logging into the
+# RightScale dashboard (https://my.rightscale.com), navigate to the Design > ServerTemplates and select a ServerTemplate.
+# The ServerTemplate ID is at the end of the browser address bar.
+:nat_host_server_template_id: 
+
+# the vpc nat server name
+:nat_server_name: vpc nat host
+
+# Number of subnets per tier
+:subnet_count: 3
+
+# Show RestClient HTTP calls
+# no|false is disabled, yes|true is enabled
+:client_log_enable: no 
+
