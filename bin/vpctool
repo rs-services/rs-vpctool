@@ -1,0 +1,6 @@
+#!/usr/bin/env ruby
+
+dir=File.dirname(File.dirname(__FILE__))
+file= "#{dir}/lib/main.rb"
+
+require_relative '../lib/main'
