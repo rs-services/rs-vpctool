@@ -2,22 +2,8 @@ require 'rubygems'
 require 'logger'
 require "right_api_client"
 require 'yaml'
-@logger            = Logger.new(STDOUT)
+@logger = Logger.new(STDOUT)
 
-def initialize_api_client(options = {})
-  # Require gems in initialize
-  account_id=ARGV[2] #ENV['RS_ACCOUNT_ID']
-  email=ARGV[1]#ENV['RS_EMAIL']
-  password=ARGV[0]#ENV['RS_PASSWORD']
-  api_url = 'https://my.rightscale.com'
-  options = {
-    account_id: account_id,
-    email: email,
-    password: password,
-    api_url: api_url
-  }.merge options
-  RightApi::Client.new(options)
-end
 
 def cloud()
   @client.clouds(id: @config[:cloud_id]).show
