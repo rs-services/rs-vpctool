@@ -1,7 +1,6 @@
 require 'rubygems'
 require 'logger'
 require "right_api_client"
-require 'pp'
 require 'yaml'
 @logger            = Logger.new(STDOUT)
 
