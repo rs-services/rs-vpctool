@@ -9,12 +9,12 @@ VPC network, internet gateway, public and private subnets, route tables, routes 
 * AWS
 
 ### Installation
-git clone git@github.com:rs-services/rs-vpctool.git
+* Install Ruby 1.9.3 or later
+* gem install bundler
+* git clone git@github.com:rs-services/rs-vpctool.git
+* cd rs-vpctool
+* bundle install
 
-Install Ruby 1.9.3 or later
-gem install right_api_client
-gem install yaml
-gem install logger
 
 ### Configuration
 1. Import the VPC NAT Host ServerTemplate (https://us-3.rightscale.com/library/server_templates/AWS-VPC-NAT-ServerTemplate-13-/lineage/47816) into your RightScale account.
@@ -29,7 +29,7 @@ Choose new VPC name and Deployment for your testing reference.
 In your console run rs-vpctool/bin/vpctool
 
 
-**Report issues in the repository issues**
+**Report problems or requests in the github repository issues section**
 
 
  
