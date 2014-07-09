@@ -133,7 +133,7 @@ def create_eip()
 end
 
 def create_nat_host()
-  server_template = @client.server_templates(id: '333429003' ).show
+  server_template = @client.server_templates(id: @config[:nat_host_server_template_id] ).show
   ssh_key = @cloud.ssh_keys.index.first
   sgs = @cloud.security_groups.index(filter: ["name==#{@network.name}"]).collect{|s| s.href}
   subnet  = @cloud.subnets.index(filter: ["name==public","network_href==#{@network.href}"]).first
