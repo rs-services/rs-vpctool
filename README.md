@@ -1,7 +1,7 @@
 rs-vpctool
 ==========
 
-This tool is used to create a VPC reference in the RightScale dashboard (http://us-3.rightscale.com)  When running the command you get a new
+This tool is used to create a VPC reference in the RightScale dashboard.  When running the command you get a new
 VPC network, internet gateway, public and private subnets, route tables, routes and a VPC NAT Host in one public subnet.
 
 

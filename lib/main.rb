@@ -93,7 +93,10 @@ def create_rt_public()
   unless rt
     rt = @client.route_tables.create(route_table: {name: 'public', 
         network_href: @network.href, cloud_href: @cloud.href})
-   
+    while rt.show.state=='pending'
+      sleep 30
+      @logger.info "subnet status: #{rt.show.state}"
+    end
     rt.show.routes.create(route: {destination_cidr_block: '0.0.0.0/0', 
         next_hop_type: 'network_gateway', next_hop_href: @gateway.href ,route_table_href: rt.href})
   end
@@ -104,7 +107,10 @@ def create_rt_private()
       "cloud_href==#{@cloud.href}"]).first
   unless rt
     rt = @client.route_tables.create(route_table: {name: 'private', cloud_href: @cloud.href, network_href: @network.href})
-    
+    while rt.show.state=='pending'
+      sleep 30
+      @logger.info "subnet status: #{rt.show.state}"
+    end
   end
   rt.show
 end
@@ -134,10 +140,11 @@ end
 
 def create_nat_host()
   server_template = @client.server_templates(id: @config[:nat_host_server_template_id] ).show
-  ssh_key = @cloud.ssh_keys.index.first
+  ssh_key = @cloud.ssh_keys.index(filter: ["resource_uid==#{@config[:nat_server_ssh_key]}"]).first
+
   sgs = @cloud.security_groups.index(filter: ["name==#{@network.name}"]).collect{|s| s.href}
   subnet  = @cloud.subnets.index(filter: ["name==public","network_href==#{@network.href}"]).first
-  server  = @deployment.show.servers.create(server: { name: 'vpc nat host',  
+  server  = @deployment.show.servers.create(server: { name: @config[:vpc_server_name],  
       instance: {cloud_href: @cloud.href, 
         associate_public_ip_address: true, datacenter_href: subnet.datacenter.href,
         security_group_hrefs: sgs ,server_template_href: server_template.href,

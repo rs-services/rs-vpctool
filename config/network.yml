@@ -4,30 +4,33 @@
 # same name it will be removed before creating the new one.
 # Chose a new VPC name for your refernce.  Using an existing name will cause the VPC to be
 # destroyed.
-:network_name: 'my vpc'
+:network_name: 'my-vpc'
 
 # Cloud ID is a required parameter. You can find your Cloud  Id by logging into the
 # RightScale dashboard (https://my.rightscale.com), navigate to the Settings > Cloud and select a cloud page.
 # The Cloud ID  is at the end of the browser address bar.
 # default: aws us-east-1
-:cloud_id: 6
+:cloud_id: 1
 
 # Deployment ID is an required parameter. You can find your Deployment  Id by logging into the
 # RightScale dashboard (https://my.rightscale.com), navigate to the Manage > Deployments and select a deployment.
 # The Deployment ID is at the end of the browser address bar.
 # Create a new deployment for this VPC Reference.  Do not use an existing deployment.
-:deployment_id: 1
+:deployment_id: 12345678
   
 # ServerTemplate ID is a required parameter. You can find your ServerTemplate Id by logging into the
 # RightScale dashboard (https://my.rightscale.com), navigate to the Design > ServerTemplates and select a ServerTemplate.
 # The ServerTemplate ID is at the end of the browser address bar.
-:nat_host_server_template_id: 
+:nat_host_server_template_id: 123456789
 
 # the vpc nat server name
-:nat_server_name: vpc nat host
+:nat_server_name: Nat 1
+
+# ssk_key name
+:nat_server_ssh_key: default-us-east
 
 # Number of subnets per tier
-:subnet_count: 3
+#:subnet_count: 3
 
 # Show RestClient HTTP calls
 # no|false is disabled, yes|true is enabled
