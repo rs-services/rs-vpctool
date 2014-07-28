@@ -144,7 +144,7 @@ def create_nat_host()
 
   sgs = @cloud.security_groups.index(filter: ["name==#{@network.name}"]).collect{|s| s.href}
   subnet  = @cloud.subnets.index(filter: ["name==public","network_href==#{@network.href}"]).first
-  server  = @deployment.show.servers.create(server: { name: @config[:vpc_server_name],  
+  server  = @deployment.show.servers.create(server: { name: @config[:nat_server_name],  
       instance: {cloud_href: @cloud.href, 
         associate_public_ip_address: true, datacenter_href: subnet.datacenter.href,
         security_group_hrefs: sgs ,server_template_href: server_template.href,
